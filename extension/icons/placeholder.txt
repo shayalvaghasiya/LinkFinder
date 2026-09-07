@@ -1,0 +1,30 @@
+# Placeholder for extension icons
+
+You need to add icon files:
+- icon16.png (16x16)
+- icon32.png (32x32)
+- icon48.png (48x48)
+- icon128.png (128x128)
+
+You can create these using any image editor or online icon generator.
+
+Recommended design:
+- Use LinkedIn blue (#0073b1) as primary color
+- Add a magnifying glass or target symbol
+- Keep it simple and recognizable
+
+Quick way to create icons:
+1. Visit https://www.favicon-generator.org/
+2. Upload a simple image/logo
+3. Generate and download all sizes
+4. Place them in this directory
+
+Or use ImageMagick:
+```bash
+convert -size 128x128 -background "#0073b1" -fill white \
+  -gravity center label:"LF" icon128.png
+
+convert icon128.png -resize 48x48 icon48.png
+convert icon128.png -resize 32x32 icon32.png
+convert icon128.png -resize 16x16 icon16.png
+```

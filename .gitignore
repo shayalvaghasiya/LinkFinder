@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models and embeddings cache
+models/
+.cache/
+
+# Extension build artifacts
+extension/dist/
+extension/build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node (if used for extension build tools)
+node_modules/
+package-lock.json

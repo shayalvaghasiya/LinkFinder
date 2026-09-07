@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Settings - LinkedIn Job Intelligence</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #0073b1;
+            margin-bottom: 24px;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section h2 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d0d0d0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .tag-input {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            border-radius: 6px;
+            min-height: 48px;
+        }
+
+        .tag {
+            background: #e3f2fd;
+            color: #0073b1;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tag button {
+            background: none;
+            border: none;
+            color: #0073b1;
+            cursor: pointer;
+            padding: 0;
+            font-size: 16px;
+        }
+
+        .add-btn {
+            background: #0073b1;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .add-btn:hover {
+            background: #005582;
+        }
+
+        .save-btn {
+            background: #2e7d32;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .save-btn:hover {
+            background: #1b5e20;
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            display: block;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            display: block;
+        }
+
+        .helper-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Profile Settings</h1>
+
+        <div id="status" class="status"></div>
+
+        <form id="profileForm">
+            <div class="section">
+                <h2>Basic Information</h2>
+                <div class="form-group">
+                    <label for="profileName">Profile Name</label>
+                    <input type="text" id="profileName" placeholder="e.g., DevOps Engineer Profile" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="experienceYears">Years of Experience</label>
+                    <input type="number" id="experienceYears" min="0" max="50" step="0.5" value="0">
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Target Roles</h2>
+                <div class="form-group">
+                    <label>Roles you're interested in</label>
+                    <div id="rolesTags" class="tag-input"></div>
+                    <input type="text" id="rolesInput" placeholder="e.g., DevOps Engineer">
+                    <button type="button" class="add-btn" onclick="addTag('roles')">Add Role</button>
+                    <div class="helper-text">Press Enter or click Add to add a role</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Skills</h2>
+
+                <div class="form-group">
+                    <label>Strong Skills (Expert level)</label>
+                    <div id="strongSkillsTags" class="tag-input"></div>
+                    <input type="text" id="strongSkillsInput" placeholder="e.g., Docker">
+                    <button type="button" class="add-btn" onclick="addTag('strongSkills')">Add Skill</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Working Skills (Proficient)</label>
+                    <div id="workingSkillsTags" class="tag-input"></div>
+                    <input type="text" id="workingSkillsInput" placeholder="e.g., Kubernetes">
+                    <button type="button" class="add-btn" onclick="addTag('workingSkills')">Add Skill</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Familiar Skills (Basic knowledge)</label>
+                    <div id="familiarSkillsTags" class="tag-input"></div>
+                    <input type="text" id="familiarSkillsInput" placeholder="e.g., Terraform">
+                    <button type="button" class="add-btn" onclick="addTag('familiarSkills')">Add Skill</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Preferred Locations</h2>
+                <div class="form-group">
+                    <div id="locationsTags" class="tag-input"></div>
+                    <input type="text" id="locationsInput" placeholder="e.g., Ahmedabad, Remote">
+                    <button type="button" class="add-btn" onclick="addTag('locations')">Add Location</button>
+                </div>
+            </div>
+
+            <button type="submit" class="save-btn">💾 Save Profile</button>
+        </form>
+    </div>
+
+    <script src="profile.js"></script>
+</body>
+</html>
