@@ -1,130 +1,31 @@
-# LinkedIn Job Intelligence Extension
+# LinkFinder — LinkedIn Job Intelligence
 
-A Chrome extension that automatically identifies and ranks job opportunities from LinkedIn Jobs and Feed pages based on your profile.
+## Project overview
+LinkFinder is a **Chrome extension + local backend** that scans your currently open **LinkedIn Jobs** pages and **LinkedIn Feed/Post** pages, extracts job opportunities, and then **filters + ranks** them against your saved profile.
 
-## Architecture
+Key behaviors:
+- **Deterministic freshness filtering** (e.g., last 24 hours) before any AI work
+- **Semantic matching** using embeddings + a local LLM
+- **Explainable ranked results** so you can decide what to open next
+- **Local-first**: profile and job data stay on your machine
 
-```
-Browser (Chrome Extension)
-    ↓
-Content Scripts (Extract jobs/posts from DOM)
-    ↓
-Local FastAPI Server (localhost:8000)
-    ↓
-Rule Engine → Matching Engine → Local LLM → Ranking
-    ↓
-SQLite Database
-```
+## Stack
+- **Browser extension:** Chrome Manifest V3 + vanilla JavaScript
+- **Extraction (content scripts):** DOM extraction on LinkedIn pages
+- **Backend API:** Python + FastAPI
+- **Database:** SQLite (via SQLAlchemy)
+- **Embeddings:** `sentence-transformers` (FAISS-capable setup)
+- **Local LLM:** Ollama (e.g., `phi3`)
+
+## Quick start
+See: [QUICKSTART.md](./QUICKSTART.md)
 
 ## Features
-
-- **Dual Source Support**: Works on LinkedIn Jobs and Feed/Post pages
-- **Smart Filtering**: Freshness, location, experience, role-based filtering
-- **Semantic Matching**: Embeddings + local LLM for intelligent matching
-- **Privacy-First**: All processing happens locally
-- **Profile-Based**: Maintains structured user profiles with skills, experience, preferences
-
-## Tech Stack
-
-- **Extension**: Chrome Manifest V3, vanilla JavaScript
-- **Backend**: Python 3.9+, FastAPI
-- **Database**: SQLite
-- **Embeddings**: sentence-transformers
-- **LLM**: Ollama (local)
-- **Vector Search**: FAISS
-
-## Project Structure
-
-```
-LinkFinder/
-├── extension/              # Chrome extension
-│   ├── manifest.json
-│   ├── background/
-│   ├── content/
-│   ├── popup/
-│   └── options/
-├── backend/                # Python FastAPI server
-│   ├── api/
-│   ├── core/
-│   ├── models/
-│   └── services/
-├── database/               # SQLite schemas
-└── docs/                   # Documentation
-```
-
-## Setup
-
-### Backend Setup
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
-```
-
-### Extension Setup
-
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `extension/` directory
-
-### Ollama Setup
-
-```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Pull a small model
-ollama pull phi3
-```
-
-## Usage
-
-1. Set up your profile in the extension options
-2. Open LinkedIn Jobs or Feed
-3. Click the extension icon
-4. Configure search parameters (freshness, location, etc.)
-5. Click "Analyze Page"
-6. View ranked results with match explanations
-
-## Non-Negotiable Requirements
-
-✅ Works on LinkedIn Jobs pages
-✅ Works on LinkedIn Feed/Post pages  
-✅ Freshness filtering (timestamp-based, not LLM)
-✅ Structured user profile
-✅ Semantic matching (not just keywords)
-✅ Local-first processing
-✅ Deduplication
-✅ Dynamic content handling (MutationObserver)
-
-## Development Roadmap
-
-### V1 (MVP)
-- Chrome extension with Jobs support
-- Current page scanning
-- Profile management
-- Rule-based filtering
-- Embedding matching
-- Local LLM integration
-- Basic ranking
-
-### V2
-- LinkedIn Posts support
-- Post job classification
-- Enhanced deduplication
-- Match history
-- Multiple profiles
-
-### V3
-- Continuous monitoring
-- Scheduled scans
-- Notifications
-- Analytics dashboard
-
-## License
-
-MIT
+- **LinkedIn Jobs support** (title, company, location, URL, posted time when available)
+- **LinkedIn Feed/Post support** with job-opportunity classification (filters out normal non-job posts)
+- **Freshness filtering** using parsed LinkedIn timestamps (mandatory)
+- **Profile-based matching** (roles, skills by proficiency, experience, locations)
+- **Semantic similarity** via embeddings (not just keyword matching)
+- **Top-N local LLM analysis** for match explanation and missing skills
+- **Weighted ranking** across role/skills/experience/location/freshness/employment
+- **Deduplication** via fingerprinting (avoids repeated opportunities across scans)
