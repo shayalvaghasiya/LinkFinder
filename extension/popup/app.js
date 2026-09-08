@@ -101,22 +101,30 @@ async function extractData() {
         throw new Error('Please open a LinkedIn page');
     }
 
-    const scanJobs = scanJobsCheckbox.checked;
-    const scanPosts = scanPostsCheckbox.checked;
-
     let jobs = [];
     let posts = [];
 
-    // Extract jobs
-    if (scanJobs && tab.url.includes('/jobs')) {
-        const jobsResponse = await chrome.tabs.sendMessage(tab.id, { action: 'extractJobs' });
-        jobs = jobsResponse?.jobs || [];
+    // NOTE: We intentionally do NOT gate by URL substring.
+    // Instead, we request extraction from the injected content scripts.
+    // If a script isn't injected for the current URL, sendMessage will throw,
+    // and we treat that extraction stream as empty.
+
+    if (scanJobsCheckbox.checked) {
+        try {
+            const jobsResponse = await chrome.tabs.sendMessage(tab.id, { action: 'extractJobs' });
+            jobs = jobsResponse?.jobs || [];
+        } catch (e) {
+            console.warn('[LinkFinder] Jobs extraction not available on this page:', e);
+        }
     }
 
-    // Extract posts
-    if (scanPosts && tab.url.includes('/feed')) {
-        const postsResponse = await chrome.tabs.sendMessage(tab.id, { action: 'extractPosts' });
-        posts = postsResponse?.posts || [];
+    if (scanPostsCheckbox.checked) {
+        try {
+            const postsResponse = await chrome.tabs.sendMessage(tab.id, { action: 'extractPosts' });
+            posts = postsResponse?.posts || [];
+        } catch (e) {
+            console.warn('[LinkFinder] Posts extraction not available on this page:', e);
+        }
     }
 
     return { jobs, posts };

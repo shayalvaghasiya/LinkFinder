@@ -4,38 +4,50 @@
 
 console.log('[LinkFinder] Feed content script loaded');
 
-// Post extraction
-function extractPost(postElement) {
-    try {
-        // LinkedIn post selectors
-        const authorElement = postElement.querySelector('.update-components-actor__name, .feed-shared-actor__name');
-        const contentElement = postElement.querySelector('.feed-shared-update-v2__description, .feed-shared-text');
-        const timeElement = postElement.querySelector('time, .update-components-actor__sub-description');
-        const linkElement = postElement.querySelector('a[href*="/posts/"]');
+function cleanText(v) {
+    if (!v) return '';
+    return String(v).replace(/\s+/g, ' ').trim();
+}
 
-        if (!contentElement) {
+function getClosestContainer(el) {
+    if (!el) return null;
+    return el.closest('div[data-urn], li, div, article') || el.parentElement;
+}
+
+function extractPostFromLink(linkEl) {
+    try {
+        const postUrl = linkEl?.href;
+        if (!postUrl) return null;
+
+        const container = getClosestContainer(linkEl);
+        if (!container) return null;
+
+        const authorElement = container.querySelector(
+            '.update-components-actor__name, .feed-shared-actor__name'
+        );
+        const author = cleanText(authorElement?.textContent) || 'Unknown';
+
+        // Prefer explicit description selectors; fall back to text nodes if needed.
+        const contentElement = container.querySelector(
+            '.feed-shared-update-v2__description, .feed-shared-text, .feed-shared-update-v2__commentary'
+        );
+
+        let content = cleanText(contentElement?.textContent);
+
+        if (!content) {
+            // Heuristic fallback: take the container’s text but trim hard.
+            content = cleanText(container.textContent).slice(0, 2000);
+        }
+
+        if (!content || content.length < 20) {
             return null;
         }
 
-        const author = authorElement ? authorElement.textContent.trim() : 'Unknown';
-        const content = contentElement.textContent.trim();
-        const postedText = timeElement ? timeElement.textContent.trim() : '';
+        const timeElement = container.querySelector('time, .update-components-actor__sub-description');
+        const postedText = cleanText(timeElement?.textContent);
 
-        // Try to get post URL
-        let postUrl = '';
-        if (linkElement) {
-            postUrl = linkElement.href;
-        } else {
-            // Fallback: construct from current URL
-            const postId = postElement.getAttribute('data-urn') || '';
-            if (postId) {
-                postUrl = `https://www.linkedin.com/posts/${postId}`;
-            }
-        }
-
-        // Extract engagement metrics
-        const likesElement = postElement.querySelector('.social-details-social-counts__reactions-count');
-        const commentsElement = postElement.querySelector('.social-details-social-counts__comments');
+        const likesElement = container.querySelector('.social-details-social-counts__reactions-count');
+        const commentsElement = container.querySelector('.social-details-social-counts__comments');
 
         const engagement = {
             likes: likesElement ? likesElement.textContent.trim() : '0',
@@ -50,41 +62,37 @@ function extractPost(postElement) {
             posted_text: postedText,
             content,
             engagement,
-            is_job_opportunity: null,  // Will be classified by backend
+            is_job_opportunity: null, // Classified by backend
             raw_data: {}
         };
     } catch (error) {
-        console.error('[LinkFinder] Error extracting post:', error);
+        console.error('[LinkFinder] Error extracting post from link:', error);
         return null;
     }
 }
 
 function extractAllPosts() {
-    const posts = [];
+    const maxPosts = 100;
 
-    // Multiple selectors for different LinkedIn layouts
-    const selectors = [
-        '.feed-shared-update-v2',
-        '.feed-shared-update',
-        'div[data-urn*="activity"]'
-    ];
+    const postLinks = Array.from(document.querySelectorAll('a[href*="/posts/"]'));
+    const postsByUrl = new Map();
 
-    for (const selector of selectors) {
-        const postElements = document.querySelectorAll(selector);
+    for (const linkEl of postLinks) {
+        const post = extractPostFromLink(linkEl);
+        if (!post) continue;
 
-        postElements.forEach(element => {
-            const post = extractPost(element);
-            if (post && post.content.length > 20) {  // Filter out empty/short posts
-                posts.push(post);
-            }
-        });
-
-        if (posts.length > 0) {
-            break;  // Found posts with this selector
+        if (!postsByUrl.has(post.post_url)) {
+            postsByUrl.set(post.post_url, post);
         }
+
+        if (postsByUrl.size >= maxPosts) break;
     }
 
-    console.log(`[LinkFinder] Extracted ${posts.length} posts`);
+    const posts = Array.from(postsByUrl.values());
+
+    console.log(`[LinkFinder] Candidate post links: ${postLinks.length}`);
+    console.log(`[LinkFinder] Extracted posts: ${posts.length}`);
+
     return posts;
 }
 

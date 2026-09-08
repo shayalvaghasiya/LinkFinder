@@ -4,28 +4,49 @@
 
 console.log('[LinkFinder] Jobs content script loaded');
 
-// Job extraction
-function extractJobCard(cardElement) {
-    try {
-        // LinkedIn job card selectors (these may need updates as LinkedIn changes)
-        const titleElement = cardElement.querySelector('.job-card-list__title, .jobs-search-results__list-item-title');
-        const companyElement = cardElement.querySelector('.job-card-container__company-name, .job-card-container__primary-description');
-        const locationElement = cardElement.querySelector('.job-card-container__metadata-item, .job-card-container__metadata-wrapper');
-        const linkElement = cardElement.querySelector('a[href*="/jobs/view/"]');
-        const timeElement = cardElement.querySelector('time, .job-card-container__listed-time');
+function getClosestContainer(el) {
+    if (!el) return null;
+    return el.closest('li, div, article') || el.parentElement;
+}
 
-        if (!titleElement || !linkElement) {
+function cleanText(v) {
+    if (!v) return '';
+    return String(v).replace(/\s+/g, ' ').trim();
+}
+
+function extractJobFromLink(linkEl) {
+    try {
+        const url = linkEl?.href;
+        if (!url) return null;
+
+        const container = getClosestContainer(linkEl);
+        if (!container) return null;
+
+        // Title
+        const titleElement = container.querySelector(
+            '.job-card-list__title, .jobs-search-results__list-item-title'
+        );
+        const title = cleanText(titleElement?.textContent) || cleanText(linkEl.textContent);
+
+        // Company
+        const companyElement = container.querySelector(
+            '.job-card-container__company-name, .job-card-container__primary-description'
+        );
+        const company = cleanText(companyElement?.textContent);
+
+        // Location
+        const locationElement = container.querySelector(
+            '.job-card-container__metadata-item, .job-card-container__metadata-wrapper'
+        );
+        const location = cleanText(locationElement?.textContent);
+
+        // Posted time
+        const timeElement = container.querySelector('time, .job-card-container__listed-time');
+        const postedText = cleanText(timeElement?.textContent);
+
+        if (!title) {
             return null;
         }
-
-        // Extract job URL
-        const url = linkElement.href;
-
-        // Extract details
-        const title = titleElement.textContent.trim();
-        const company = companyElement ? companyElement.textContent.trim() : '';
-        const location = locationElement ? locationElement.textContent.trim() : '';
-        const postedText = timeElement ? timeElement.textContent.trim() : '';
 
         return {
             source: 'linkedin',
@@ -35,44 +56,43 @@ function extractJobCard(cardElement) {
             location,
             url,
             posted_text: postedText,
-            description: null,  // Will be extracted if card is expanded
+            description: null, // Will be extracted if card is expanded (future)
             skills: [],
             experience_text: null,
             employment_type: null,
             raw_data: {}
         };
     } catch (error) {
-        console.error('[LinkFinder] Error extracting job card:', error);
+        console.error('[LinkFinder] Error extracting job from link:', error);
         return null;
     }
 }
 
 function extractAllJobs() {
-    const jobs = [];
+    const maxJobs = 100;
 
-    // Multiple selectors to handle different LinkedIn layouts
-    const selectors = [
-        '.jobs-search-results__list-item',
-        '.job-card-container',
-        '.job-card-list__entity-lockup'
-    ];
+    // Link-first extraction: LinkedIn card subtrees change often.
+    // Links tend to be stable, so we anchor extraction to them.
+    const jobLinks = Array.from(document.querySelectorAll('a[href*="/jobs/view/"]'));
 
-    for (const selector of selectors) {
-        const jobCards = document.querySelectorAll(selector);
+    const jobByUrl = new Map();
 
-        jobCards.forEach(card => {
-            const job = extractJobCard(card);
-            if (job) {
-                jobs.push(job);
-            }
-        });
+    for (const linkEl of jobLinks) {
+        const job = extractJobFromLink(linkEl);
+        if (!job) continue;
 
-        if (jobs.length > 0) {
-            break;  // Found jobs with this selector
+        if (!jobByUrl.has(job.url)) {
+            jobByUrl.set(job.url, job);
         }
+
+        if (jobByUrl.size >= maxJobs) break;
     }
 
-    console.log(`[LinkFinder] Extracted ${jobs.length} jobs`);
+    const jobs = Array.from(jobByUrl.values());
+
+    console.log(`[LinkFinder] Candidate job links: ${jobLinks.length}`);
+    console.log(`[LinkFinder] Extracted jobs: ${jobs.length}`);
+
     return jobs;
 }
 
