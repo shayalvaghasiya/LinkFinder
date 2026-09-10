@@ -1,12 +1,13 @@
-"""Local storage utilities for the extension.
-
-This version removes the FastAPI backend dependency and stores:
-- profiles
-- active profile pointer
-- scan preferences
-
-All data stays in chrome.storage.local.
-"""
+/*
+ * Local storage utilities for the extension.
+ *
+ * Stores:
+ * - profiles
+ * - active profile pointer
+ * - scan preferences
+ *
+ * All data stays in chrome.storage.local.
+ */
 
 const STORAGE_KEYS = {
     PROFILES: 'profiles',
@@ -17,7 +18,7 @@ const STORAGE_KEYS = {
 function safeNowIso() {
     try {
         return new Date().toISOString();
-    } catch (e) {
+    } catch {
         return '';
     }
 }
@@ -41,14 +42,42 @@ function getDefaultSearchConfig() {
     };
 }
 
+function storageGet(keys) {
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.storage.local.get(keys, (res) => {
+                const err = chrome.runtime?.lastError;
+                if (err) reject(err);
+                else resolve(res);
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+function storageSet(obj) {
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.storage.local.set(obj, () => {
+                const err = chrome.runtime?.lastError;
+                if (err) reject(err);
+                else resolve();
+            });
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
 class Storage {
     static async getProfiles() {
-        const res = await chrome.storage.local.get([STORAGE_KEYS.PROFILES]);
+        const res = await storageGet([STORAGE_KEYS.PROFILES]);
         return ensureProfilesArray(res[STORAGE_KEYS.PROFILES]);
     }
 
     static async setProfiles(profiles) {
-        await chrome.storage.local.set({ [STORAGE_KEYS.PROFILES]: profiles });
+        await storageSet({ [STORAGE_KEYS.PROFILES]: profiles });
     }
 
     static async listProfiles() {
@@ -56,12 +85,12 @@ class Storage {
     }
 
     static async getActiveProfileId() {
-        const res = await chrome.storage.local.get([STORAGE_KEYS.ACTIVE_PROFILE_ID]);
+        const res = await storageGet([STORAGE_KEYS.ACTIVE_PROFILE_ID]);
         return res[STORAGE_KEYS.ACTIVE_PROFILE_ID] ?? null;
     }
 
     static async setActiveProfileId(profileId) {
-        await chrome.storage.local.set({ [STORAGE_KEYS.ACTIVE_PROFILE_ID]: profileId });
+        await storageSet({ [STORAGE_KEYS.ACTIVE_PROFILE_ID]: profileId });
     }
 
     static async getActiveProfile() {
@@ -78,8 +107,8 @@ class Storage {
 
         const newProfile = {
             id: idFromNow(),
-            name: profilePayload.name,
-            profile_data: profilePayload.profile_data,
+            name: profilePayload?.name || 'Imported Profile',
+            profile_data: profilePayload?.profile_data || {},
             created_at: now,
             updated_at: now
         };
@@ -101,8 +130,8 @@ class Storage {
         const now = safeNowIso();
         profiles[idx] = {
             ...profiles[idx],
-            name: profilePayload.name,
-            profile_data: profilePayload.profile_data,
+            name: profilePayload?.name || profiles[idx].name,
+            profile_data: profilePayload?.profile_data || profiles[idx].profile_data,
             updated_at: now
         };
 
@@ -126,12 +155,12 @@ class Storage {
     }
 
     static async getSearchConfig() {
-        const res = await chrome.storage.local.get([STORAGE_KEYS.SEARCH_CONFIG]);
+        const res = await storageGet([STORAGE_KEYS.SEARCH_CONFIG]);
         return res[STORAGE_KEYS.SEARCH_CONFIG] || getDefaultSearchConfig();
     }
 
     static async setSearchConfig(config) {
-        await chrome.storage.local.set({ [STORAGE_KEYS.SEARCH_CONFIG]: config });
+        await storageSet({ [STORAGE_KEYS.SEARCH_CONFIG]: config });
     }
 }
 

@@ -5,6 +5,7 @@
 import { Storage } from '../storage/storage.js';
 import { pipelineRun } from '../ml/pipeline.js';
 import { DEFAULT_SCAN_LIMITS } from '../automation/scanConfig.js';
+import { parseResumeFile } from '../resume/resumeParser.js';
 
 const scanBtn = document.getElementById('scanBtn');
 
@@ -20,20 +21,170 @@ const scanJobsCheckbox = document.getElementById('scanJobs');
 const scanPostsCheckbox = document.getElementById('scanPosts');
 const freshnessSelect = document.getElementById('freshness');
 
-// State
-let currentProfile = null;
+// Profile editor UI
+const profileDetails = document.getElementById('profileDetails');
 
-async function init() {
-    currentProfile = await Storage.getActiveProfile();
+const ui = {
+    resumeFile: document.getElementById('resumeFile'),
+    resumeStatus: document.getElementById('resumeStatus'),
+    parseResumeBtn: document.getElementById('parseResumeBtn'),
 
-    if (!currentProfile) {
-        showStatus('⚠️ No profile found. Please create one in settings.', 'warning');
-        analyzeBtn.disabled = true;
-        if (scanBtn) scanBtn.disabled = true;
-        return;
+    profileForm: document.getElementById('profileForm'),
+    profileFormStatus: document.getElementById('profileFormStatus'),
+
+    profileName: document.getElementById('profileName'),
+    experienceYears: document.getElementById('experienceYears'),
+
+    rolesInput: document.getElementById('rolesInput'),
+    rolesTags: document.getElementById('rolesTags'),
+    addRoleBtn: document.getElementById('addRoleBtn'),
+
+    strongSkillInput: document.getElementById('strongSkillInput'),
+    strongSkillsTags: document.getElementById('strongSkillsTags'),
+    addStrongSkillBtn: document.getElementById('addStrongSkillBtn'),
+
+    workingSkillInput: document.getElementById('workingSkillInput'),
+    workingSkillsTags: document.getElementById('workingSkillsTags'),
+    addWorkingSkillBtn: document.getElementById('addWorkingSkillBtn'),
+
+    familiarSkillInput: document.getElementById('familiarSkillInput'),
+    familiarSkillsTags: document.getElementById('familiarSkillsTags'),
+    addFamiliarSkillBtn: document.getElementById('addFamiliarSkillBtn'),
+
+    locationsInput: document.getElementById('locationsInput'),
+    locationsTags: document.getElementById('locationsTags'),
+    addLocationBtn: document.getElementById('addLocationBtn')
+};
+
+function showEl(el, visible) {
+    if (!el) return;
+    try {
+        el.style.display = visible ? 'block' : 'none';
+    } catch {
+        // ignore
+    }
+}
+
+function setTinyStatus(el, text, type = 'info') {
+    // Keep profile panel visible while we show statuses.
+    if (profileDetails) {
+        profileDetails.style.display = 'block';
     }
 
-    showStatus(`Profile: ${currentProfile.name}`, 'success');
+    if (!el) return;
+    el.textContent = text;
+    showEl(el, !!text);
+
+    const color =
+        type === 'success' ? '#2e7d32' :
+        type === 'warning' ? '#f57c00' :
+        type === 'error' ? '#c62828' :
+        '#666';
+
+    try {
+        el.style.color = color;
+    } catch {
+        // ignore
+    }
+}
+
+// State
+let currentProfile = null;
+let currentProfileId = null;
+let resumeLoadedFile = null;
+let lastParsedProfilePayload = null; // not auto-saved
+
+let tagState = {
+    roles: [],
+    strong: [],
+    working: [],
+    familiar: [],
+    locations: []
+};
+
+function normalizeTagValue(value) {
+    return String(value || '')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function clearProfileForm() {
+    if (ui.profileName) ui.profileName.value = '';
+    if (ui.experienceYears) ui.experienceYears.value = 0;
+
+    tagState = {
+        roles: [],
+        strong: [],
+        working: [],
+        familiar: [],
+        locations: []
+    };
+
+    renderAllTags();
+}
+
+function renderTagsFor(field, containerEl) {
+    if (!containerEl) return;
+    containerEl.innerHTML = '';
+
+    for (const value of (tagState[field] || [])) {
+        const tag = document.createElement('div');
+        tag.className = 'tag';
+
+        const label = document.createElement('span');
+        label.textContent = value;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tag-remove';
+        btn.textContent = '×';
+        btn.setAttribute('aria-label', `Remove ${field} tag`);
+        btn.addEventListener('click', () => {
+            tagState[field] = (tagState[field] || []).filter(x => x !== value);
+            renderAllTags();
+        });
+
+        tag.append(label, btn);
+        containerEl.appendChild(tag);
+    }
+}
+
+function renderAllTags() {
+    renderTagsFor('roles', ui.rolesTags);
+    renderTagsFor('strong', ui.strongSkillsTags);
+    renderTagsFor('working', ui.workingSkillsTags);
+    renderTagsFor('familiar', ui.familiarSkillsTags);
+    renderTagsFor('locations', ui.locationsTags);
+}
+
+function addTagFromInput(field, inputEl) {
+    if (!inputEl) return;
+
+    const value = normalizeTagValue(inputEl.value);
+    if (!value) return;
+
+    if (!tagState[field]) tagState[field] = [];
+    if (!tagState[field].includes(value)) {
+        tagState[field].push(value);
+        renderAllTags();
+    }
+
+    inputEl.value = '';
+}
+
+function applyProfilePayloadToForm(profilePayload) {
+    const pd = profilePayload?.profile_data || {};
+
+    ui.profileName.value = profilePayload?.name || '';
+    ui.experienceYears.value = pd?.experience_years ?? 0;
+
+    tagState.roles = pd?.roles || [];
+    tagState.strong = pd?.skills?.strong || [];
+    tagState.working = pd?.skills?.working || [];
+    tagState.familiar = pd?.skills?.familiar || [];
+    tagState.locations = pd?.locations || [];
+
+    renderAllTags();
 }
 
 function showStatus(message, type = 'info') {
@@ -228,7 +379,6 @@ async function selfScan() {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab || !tab.id) throw new Error('No active tab');
 
-        // First, ensure content script injection works; then run a few scroll cycles.
         const limits = DEFAULT_SCAN_LIMITS;
         const batches = [];
 
@@ -240,7 +390,6 @@ async function selfScan() {
                 batches.push({ jobs, posts });
             }
 
-            // Scroll inside the LinkedIn tab (bounded, no navigation).
             await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: () => {
@@ -258,7 +407,6 @@ async function selfScan() {
         let allJobs = batches.flatMap(b => b.jobs);
         let allPosts = batches.flatMap(b => b.posts);
 
-        // Enforce bounds before heavy ML work.
         allJobs = allJobs.slice(0, limits.max_jobs);
         allPosts = allPosts.slice(0, limits.max_posts);
 
@@ -278,6 +426,165 @@ async function selfScan() {
         showStatus(`❌ Error: ${error.message}`, 'error');
     } finally {
         setLoading(false);
+    }
+}
+
+async function saveProfileFromForm(event) {
+    if (event) event.preventDefault();
+
+    if (!ui.profileForm) return;
+
+    const profilePayload = {
+        name: normalizeTagValue(ui.profileName.value) || 'Imported Profile',
+        profile_data: {
+            roles: tagState.roles || [],
+            experience_years: parseFloat(ui.experienceYears.value) || 0,
+            skills: {
+                strong: tagState.strong || [],
+                working: tagState.working || [],
+                familiar: tagState.familiar || []
+            },
+            locations: tagState.locations || []
+        }
+    };
+
+    ui.profileFormStatus.textContent = '';
+
+    try {
+        ui.profileFormStatus.style.display = 'block';
+        setTinyStatus(ui.profileFormStatus, 'Saving profile...', 'info');
+
+        let saved;
+        if (currentProfileId) {
+            saved = await Storage.updateProfile(currentProfileId, profilePayload);
+        } else {
+            saved = await Storage.createProfile(profilePayload);
+        }
+
+        currentProfile = saved;
+        currentProfileId = saved?.id || null;
+
+        setTinyStatus(ui.profileFormStatus, '✅ Profile saved. You can now scan/analyze.', 'success');
+        showStatus(`Profile: ${currentProfile.name}`, 'success');
+
+        if (analyzeBtn) analyzeBtn.disabled = false;
+        if (scanBtn) scanBtn.disabled = false;
+
+        // Normalize the form from what we saved.
+        applyProfilePayloadToForm(saved);
+    } catch (e) {
+        console.error('Save profile failed:', e);
+        setTinyStatus(ui.profileFormStatus, `❌ Failed to save profile: ${e.message}`, 'error');
+    }
+}
+
+async function parseResumeAndPrefill() {
+    if (!ui.resumeFile || !ui.parseResumeBtn) return;
+
+    const file = ui.resumeFile.files?.[0];
+    if (!file) {
+        setTinyStatus(ui.resumeStatus, 'Please choose a resume file first.', 'warning');
+        return;
+    }
+
+    resumeLoadedFile = file;
+    lastParsedProfilePayload = null;
+
+    setTinyStatus(ui.resumeStatus, 'Parsing resume...', 'info');
+    ui.parseResumeBtn.disabled = true;
+
+    try {
+        const parsed = await parseResumeFile(file);
+        lastParsedProfilePayload = parsed?.profilePayload || null;
+
+        const warnings = parsed?.warnings || [];
+        if (warnings.length) {
+            setTinyStatus(ui.resumeStatus, warnings.join(' '), 'warning');
+        }
+
+        if (!parsed?.profilePayload) {
+            // Keep whatever the user already typed.
+            return;
+        }
+
+        applyProfilePayloadToForm(parsed.profilePayload);
+        setTinyStatus(ui.profileFormStatus, '✅ Resume parsed. Review fields, then Save Profile.', 'success');
+        showStatus('✅ Resume parsed. Review and save.', 'success');
+    } catch (e) {
+        console.error('Resume parse failed:', e);
+        setTinyStatus(ui.resumeStatus, `❌ Parse failed: ${e.message}`, 'error');
+    } finally {
+        ui.parseResumeBtn.disabled = false;
+    }
+}
+
+function bindTagInputs() {
+    const bindings = [
+        ['roles', ui.rolesInput, ui.addRoleBtn],
+        ['strong', ui.strongSkillInput, ui.addStrongSkillBtn],
+        ['working', ui.workingSkillInput, ui.addWorkingSkillBtn],
+        ['familiar', ui.familiarSkillInput, ui.addFamiliarSkillBtn],
+        ['locations', ui.locationsInput, ui.addLocationBtn]
+    ];
+
+    for (const [field, inputEl, addBtn] of bindings) {
+        if (addBtn) {
+            addBtn.addEventListener('click', () => addTagFromInput(field, inputEl));
+        }
+
+        if (inputEl) {
+            inputEl.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTagFromInput(field, inputEl);
+                }
+            });
+        }
+    }
+}
+
+async function init() {
+    clearProfileForm();
+
+    // If there's no stored profile, show the editor; otherwise still allow it.
+    if (profileDetails) profileDetails.style.display = 'block';
+
+    currentProfile = await Storage.getActiveProfile();
+    currentProfileId = currentProfile?.id || null;
+
+    // Default visibility: keep panel visible so users can edit directly.
+    if (profileDetails) profileDetails.style.display = 'block';
+
+
+
+
+
+
+    bindTagInputs();
+
+    if (!currentProfile) {
+        if (profileDetails) profileDetails.open = true;
+        showStatus('⚠️ No profile found. Parse a resume or add fields, then Save Profile.', 'warning');
+        analyzeBtn.disabled = true;
+        if (scanBtn) scanBtn.disabled = true;
+        setTinyStatus(ui.profileFormStatus, 'Create your profile to enable scanning/analyzing.', 'warning');
+
+        // Ensure <details> content is open so user can edit immediately.
+        if (profileDetails) profileDetails.open = true;
+    } else {
+        showStatus(`Profile: ${currentProfile.name}`, 'success');
+        applyProfilePayloadToForm(currentProfile);
+        if (analyzeBtn) analyzeBtn.disabled = false;
+        if (scanBtn) scanBtn.disabled = false;
+        setTinyStatus(ui.profileFormStatus, 'Profile loaded. You can edit and Save.', 'info');
+    }
+
+    if (ui.parseResumeBtn) {
+        ui.parseResumeBtn.addEventListener('click', parseResumeAndPrefill);
+    }
+
+    if (ui.profileForm) {
+        ui.profileForm.addEventListener('submit', saveProfileFromForm);
     }
 }
 
