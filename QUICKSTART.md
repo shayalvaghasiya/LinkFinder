@@ -1,86 +1,46 @@
 # Quick Start
 
-## 1. Start Backend
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
-```
-
-Backend runs at http://localhost:8000
-
-## 2. Start Ollama
-
-```bash
-ollama pull phi3
-ollama serve  # Usually starts automatically
-```
-
-## 3. Load Extension
-
+## 1) Load the extension
 1. Open Chrome → `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select `extension/` folder
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select the `extension/` folder
 
-## 4. Create Profile
+## 2) Create your profile
+1. Click the extension icon
+2. Open **⚙️ Profile Settings**
+3. Fill in:
+   - Profile name
+   - Years of experience
+   - Target roles
+   - Strong / Working / Familiar skills
+   - Preferred locations
+4. Click **💾 Save Profile**
 
-1. Click extension icon
-2. Go to "⚙️ Profile Settings"
-3. Fill in your details
-4. Save
+## 3) Analyze a LinkedIn page
+1. Open a LinkedIn page:
+   - Jobs: `https://www.linkedin.com/jobs/search/`
+   - Feed: `https://www.linkedin.com/feed/`
+   - Direct post URLs: `https://www.linkedin.com/posts/...`
+2. Click the extension icon
+3. Choose one:
+   - **Analyze Page** (process currently visible content)
+   - **Start Self-Scan** (scroll-only bounded extraction)
 
-## 5. Test It
-
-1. Open https://www.linkedin.com/jobs/search/
-2. Click extension icon
-3. Click "Analyze Page"
-4. View results!
-
-## Example Profile
-
-```
-Name: DevOps Engineer Profile
-Experience: 1.5 years
-
-Roles:
-- DevOps Engineer
-- Cloud Engineer
-- SRE
-
-Strong Skills:
-- Python
-- Docker
-- Linux
-- Jenkins
-
-Working Skills:
-- AWS
-- Terraform
-- Kubernetes
-
-Locations:
-- Ahmedabad
-- Bangalore
-- Remote
-```
+## 4) Understand results
+- Matches include a score and an explanation (role/skills/location/experience breakdown + a short summary)
+- If something looks missing, try adjusting:
+  - freshness window
+  - role/skills
+  - locations
 
 ## Troubleshooting
+- **No results**
+  - Make sure you are on a LinkedIn Jobs or Feed/Post URL
+  - Freshness window may be too strict for the content on the page
+  - Extraction can vary by LinkedIn layout; check DevTools console logs for `[LinkFinder]` messages
 
-**Backend won't start:**
-- Check Python version: `python --version` (need 3.9+)
-- Check port 8000 is free
+- **Errors in popup**
+  - Open **Inspect popup** and check the console
 
-**Extension not working:**
-- Check backend is running: http://localhost:8000/api/v1/health
-- Check browser console (F12) for errors
-
-**No results:**
-- Make sure you're on LinkedIn jobs or feed page
-- Check that freshness filter matches job posting times
-- Verify profile is saved
-
-See SETUP.md for detailed instructions.
+See `SETUP.md` for deeper configuration notes.
