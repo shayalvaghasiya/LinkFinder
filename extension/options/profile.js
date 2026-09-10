@@ -1,8 +1,8 @@
 /**
- * Profile management UI
+ * Profile management UI (browser-only).
  */
 
-const API_URL = 'http://localhost:8000/api/v1';
+import { Storage } from '../storage/storage.js';
 
 // State
 const state = {
@@ -15,11 +15,10 @@ const state = {
 
 let currentProfileId = null;
 
-// Initialize
 async function init() {
-    await loadProfile();
+    await loadProfileIntoForm();
 
-    // Add Enter key handlers
+    // Enter key handlers
     ['roles', 'strongSkills', 'workingSkills', 'familiarSkills', 'locations'].forEach(field => {
         const input = document.getElementById(`${field}Input`);
         input.addEventListener('keypress', (e) => {
@@ -31,62 +30,38 @@ async function init() {
     });
 }
 
-// Load profile
-async function loadProfile() {
+async function loadProfileIntoForm() {
     try {
-        const stored = await chrome.storage.local.get(['currentProfileId']);
+        const profile = await Storage.getActiveProfile();
+        if (!profile) return;
 
-        if (!stored.currentProfileId) {
-            // Try to get first profile
-            const response = await fetch(`${API_URL}/profiles`);
-            if (response.ok) {
-                const profiles = await response.json();
-                if (profiles.length > 0) {
-                    populateForm(profiles[0]);
-                    currentProfileId = profiles[0].id;
-                    return;
-                }
-            }
-            return;
-        }
+        currentProfileId = profile.id;
+        document.getElementById('profileName').value = profile.name || '';
+        document.getElementById('experienceYears').value = profile.profile_data?.experience_years ?? 0;
 
-        // Load specific profile
-        const response = await fetch(`${API_URL}/profiles/${stored.currentProfileId}`);
-        if (response.ok) {
-            const profile = await response.json();
-            populateForm(profile);
-            currentProfileId = profile.id;
-        }
-    } catch (error) {
-        console.error('Error loading profile:', error);
+        state.roles = profile.profile_data?.roles || [];
+        state.strongSkills = profile.profile_data?.skills?.strong || [];
+        state.workingSkills = profile.profile_data?.skills?.working || [];
+        state.familiarSkills = profile.profile_data?.skills?.familiar || [];
+        state.locations = profile.profile_data?.locations || [];
+
+        renderTags('roles');
+        renderTags('strongSkills');
+        renderTags('workingSkills');
+        renderTags('familiarSkills');
+        renderTags('locations');
+
+        showStatus('✅ Profile loaded', 'success');
+    } catch (e) {
+        console.error('Profile load failed:', e);
     }
 }
 
-// Populate form with profile data
-function populateForm(profile) {
-    document.getElementById('profileName').value = profile.name;
-    document.getElementById('experienceYears').value = profile.profile_data.experience_years || 0;
-
-    state.roles = profile.profile_data.roles || [];
-    state.strongSkills = profile.profile_data.skills?.strong || [];
-    state.workingSkills = profile.profile_data.skills?.working || [];
-    state.familiarSkills = profile.profile_data.skills?.familiar || [];
-    state.locations = profile.profile_data.locations || [];
-
-    renderTags('roles');
-    renderTags('strongSkills');
-    renderTags('workingSkills');
-    renderTags('familiarSkills');
-    renderTags('locations');
-}
-
-// Add tag
 function addTag(field) {
     const input = document.getElementById(`${field}Input`);
     const value = input.value.trim();
 
     if (!value) return;
-
     if (!state[field].includes(value)) {
         state[field].push(value);
         renderTags(field);
@@ -95,13 +70,11 @@ function addTag(field) {
     input.value = '';
 }
 
-// Remove tag
 function removeTag(field, value) {
     state[field] = state[field].filter(item => item !== value);
     renderTags(field);
 }
 
-// Render tags
 function renderTags(field) {
     const container = document.getElementById(`${field}Tags`);
     container.innerHTML = '';
@@ -111,28 +84,27 @@ function renderTags(field) {
         tag.className = 'tag';
         tag.innerHTML = `
             ${value}
-            <button onclick="removeTag('${field}', '${value}')">×</button>
+            <button type="button" onclick="removeTag('${field}', '${value}')">×</button>
         `;
         container.appendChild(tag);
     });
 }
 
-// Show status
 function showStatus(message, type = 'success') {
     const status = document.getElementById('status');
     status.textContent = message;
     status.className = `status ${type}`;
 
+    status.style.display = 'block';
     setTimeout(() => {
         status.style.display = 'none';
     }, 3000);
 }
 
-// Save profile
 async function saveProfile(event) {
     event.preventDefault();
 
-    const profileData = {
+    const profilePayload = {
         name: document.getElementById('profileName').value,
         profile_data: {
             roles: state.roles,
@@ -150,43 +122,25 @@ async function saveProfile(event) {
     };
 
     try {
-        let response;
-
+        let saved;
         if (currentProfileId) {
-            // Update existing profile
-            response = await fetch(`${API_URL}/profiles/${currentProfileId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(profileData)
-            });
+            saved = await Storage.updateProfile(currentProfileId, profilePayload);
         } else {
-            // Create new profile
-            response = await fetch(`${API_URL}/profiles`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(profileData)
-            });
+            saved = await Storage.createProfile(profilePayload);
         }
 
-        if (!response.ok) {
-            throw new Error('Failed to save profile');
-        }
-
-        const savedProfile = await response.json();
-        currentProfileId = savedProfile.id;
-
-        // Save profile ID to storage
-        await chrome.storage.local.set({ currentProfileId: savedProfile.id });
-
+        currentProfileId = saved.id;
         showStatus('✅ Profile saved successfully!', 'success');
-    } catch (error) {
-        console.error('Error saving profile:', error);
+    } catch (e) {
+        console.error('Save profile failed:', e);
         showStatus('❌ Failed to save profile', 'error');
     }
 }
 
-// Event listeners
+// Expose removeTag to inline onclick
+window.removeTag = removeTag;
+window.addTag = addTag;
+
 document.getElementById('profileForm').addEventListener('submit', saveProfile);
 
-// Initialize
 init();
